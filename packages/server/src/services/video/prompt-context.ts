@@ -1,5 +1,6 @@
 export interface SceneVideoPromptLimits {
   narrationSummary: number;
+  storyboardNarrationBeat: number;
   illustrationPrompt: number;
   artStyle: number;
   title: number;
@@ -26,6 +27,7 @@ export interface GalleryVideoSourceExchange {
 
 const XAI_PROMPT_MAX_LENGTH = 3800;
 const UNBOUNDED_PROMPT_PART_LENGTH = Number.MAX_SAFE_INTEGER;
+export const STORYBOARD_ANIMATION_PROMPT_MAX_LENGTH = 6_000;
 
 const BOILERPLATE_PROMPT_CHUNK_PATTERNS = [
   /^(anime style|illustration|best quality|detailed eyes|clean lineart)$/i,
@@ -44,6 +46,7 @@ export function getSceneVideoPromptLimits(isXai: boolean, isGeminiOmni = false):
   if (isXai) {
     return {
       narrationSummary: 360,
+      storyboardNarrationBeat: XAI_PROMPT_MAX_LENGTH,
       illustrationPrompt: 900,
       artStyle: 260,
       title: 96,
@@ -53,6 +56,7 @@ export function getSceneVideoPromptLimits(isXai: boolean, isGeminiOmni = false):
   if (isGeminiOmni) {
     return {
       narrationSummary: UNBOUNDED_PROMPT_PART_LENGTH,
+      storyboardNarrationBeat: UNBOUNDED_PROMPT_PART_LENGTH,
       illustrationPrompt: UNBOUNDED_PROMPT_PART_LENGTH,
       artStyle: UNBOUNDED_PROMPT_PART_LENGTH,
       title: UNBOUNDED_PROMPT_PART_LENGTH,
@@ -61,6 +65,7 @@ export function getSceneVideoPromptLimits(isXai: boolean, isGeminiOmni = false):
   }
   return {
     narrationSummary: 650,
+    storyboardNarrationBeat: STORYBOARD_ANIMATION_PROMPT_MAX_LENGTH,
     illustrationPrompt: 1400,
     artStyle: 420,
     title: 120,

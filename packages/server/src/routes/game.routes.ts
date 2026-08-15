@@ -290,6 +290,7 @@ import {
   compactVideoPromptText,
   excerptIllustrationPromptForVideo,
   limitSceneVideoPromptForProvider,
+  STORYBOARD_ANIMATION_PROMPT_MAX_LENGTH,
   summarizeVideoNarration,
   type SceneVideoPromptLimits,
 } from "../services/video/prompt-context.js";
@@ -1630,7 +1631,10 @@ async function buildStoryboardGalleryAnimatePrompt(args: {
     args.ownerMode === "roleplay"
       ? args.meta.roleplayStoryboardVideoPromptTemplateId
       : args.meta.gameStoryboardVideoPromptTemplateId;
-  const narrationSummary = compactVideoPromptText(args.plannedFrame.narrationBeat, args.promptLimits.narrationSummary);
+  const narrationSummary = compactVideoPromptText(
+    args.plannedFrame.narrationBeat,
+    args.promptLimits.storyboardNarrationBeat,
+  );
   if (!narrationSummary) {
     throw new Error("Storyboard keyframe is missing its planned animation prompt.");
   }
@@ -5460,7 +5464,7 @@ function fallbackStoryboardPlan(args: {
   };
 }
 
-function sanitizeStoryboardPlan(
+export function sanitizeStoryboardPlan(
   raw: unknown,
   args: {
     sourceNarration: string;
@@ -5481,7 +5485,10 @@ function sanitizeStoryboardPlan(
     .map((rawFrame, index): PlannedStoryboardKeyframe | null => {
       const frame = asStoryboardRecord(rawFrame);
       const fallbackFrame = fallback.keyframes[index] ?? fallback.keyframes[0] ?? null;
-      const narrationBeat = compactStoryboardText(frame.narrationBeat, args.narrationBeatMaxChars ?? 1200);
+      const narrationBeat = compactStoryboardText(
+        frame.narrationBeat,
+        args.narrationBeatMaxChars ?? STORYBOARD_ANIMATION_PROMPT_MAX_LENGTH,
+      );
       const mangaPanelPrompt = compactStoryboardText(frame.mangaPanelPrompt, 5000);
       const imagePrompt = compactStoryboardText(frame.imagePrompt, 6500) || mangaPanelPrompt || narrationBeat;
       if (!narrationBeat && !imagePrompt) return null;
@@ -11657,7 +11664,7 @@ export async function gameRoutes(app: FastifyInstance) {
                   const refinement = resolveStoryboardAnimationRefinement(
                     extraction.content,
                     plannedFrame.narrationBeat,
-                    videoRuntime.promptLimits.narrationSummary,
+                    videoRuntime.promptLimits.storyboardNarrationBeat,
                   );
                   if (!refinement) {
                     throw new Error("Animation Planner returned no usable image-aware motion beat");

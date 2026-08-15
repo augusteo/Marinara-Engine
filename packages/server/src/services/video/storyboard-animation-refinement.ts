@@ -1,13 +1,9 @@
-import {
-  normalizeAgentPromptTemplateOptions,
-  type StoryboardAnimationSuitability,
-} from "@marinara-engine/shared";
+import { normalizeAgentPromptTemplateOptions, type StoryboardAnimationSuitability } from "@marinara-engine/shared";
 import type { ChatMessage } from "../llm/base-provider.js";
 import { renderTemplate } from "../prompt-overrides/index.js";
-import { compactVideoPromptText } from "./prompt-context.js";
+import { compactVideoPromptText, STORYBOARD_ANIMATION_PROMPT_MAX_LENGTH } from "./prompt-context.js";
 import type { VideoReferenceImage } from "./video-generation.js";
 
-const MAX_REFINEMENT_CHARS = 6_000;
 const MAX_RENDERED_PROMPT_CHARS = 18_000;
 
 const STORYBOARD_ANIMATION_REFINEMENT_VARIABLES = [
@@ -67,7 +63,7 @@ export function buildStoryboardAnimationRefinementMessages(args: {
       template,
       {
         title: compactVideoPromptText(args.title, 300),
-        motionIntent: compactVideoPromptText(args.motionIntent, 4_000),
+        motionIntent: compactVideoPromptText(args.motionIntent, STORYBOARD_ANIMATION_PROMPT_MAX_LENGTH),
         imagePrompt: compactVideoPromptText(args.imagePrompt, 2_000),
         sourceSections: compactVideoPromptText(args.sourceSections, 6_000),
         characters: compactVideoPromptText(args.characters.join(", "), 1_200),
@@ -108,7 +104,7 @@ export function resolveStoryboardAnimationRefinement(
   const candidate = record.narrationBeat ?? record.animationPrompt ?? record.videoPrompt ?? record.prompt;
   const narrationBeat =
     typeof candidate === "string"
-      ? compactVideoPromptText(candidate, Math.min(Math.max(1, maxLength), MAX_REFINEMENT_CHARS))
+      ? compactVideoPromptText(candidate, Math.min(Math.max(1, maxLength), STORYBOARD_ANIMATION_PROMPT_MAX_LENGTH))
       : "";
   const expectedSegments = segmentCount(motionIntent);
   if (!narrationBeat || expectedSegments === null || segmentCount(narrationBeat) !== expectedSegments) return null;

@@ -602,6 +602,7 @@ import {
   getSceneVideoPromptLimits,
   resolveGalleryVideoNarrationSummary,
   resolveGalleryVideoSourceExchange,
+  STORYBOARD_ANIMATION_PROMPT_MAX_LENGTH,
 } from "../../packages/server/src/services/video/prompt-context.js";
 import {
   buildRoleplayVideoDirectionMessages,
@@ -669,6 +670,7 @@ import {
   extractCharacterAppearanceText,
   resolveDynamicGameImagePromptConnection,
   resolveNpcPortraitAppearance,
+  sanitizeStoryboardPlan,
   sanitizeNpcPortraitAppearanceText,
   selectLatestGameTurnNarration,
   selectStoryboardAppearanceCharacterNames,
@@ -4689,7 +4691,7 @@ const cases: RegressionCase[] = [
     },
   },
   {
-    name: "Gemini Omni video prompts preserve complete storyboard direction",
+    name: "Storyboard animation prompts use their full structured direction allowance",
     run() {
       const direction = [
         "0.0-2.0s: Establish the hall and move toward the relic.",
@@ -4701,9 +4703,48 @@ const cases: RegressionCase[] = [
       const defaultLimits = getSceneVideoPromptLimits(false);
       const xaiLimits = getSceneVideoPromptLimits(true, true);
 
+      assert.ok(direction.length > 1200, "the regression direction should exceed the former planner limit");
       assert.equal(compactVideoPromptText(direction, omniLimits.narrationSummary), direction.trim());
       assert.ok(compactVideoPromptText(direction, defaultLimits.narrationSummary).endsWith("..."));
+      assert.equal(defaultLimits.storyboardNarrationBeat, STORYBOARD_ANIMATION_PROMPT_MAX_LENGTH);
+      assert.equal(compactVideoPromptText(direction, defaultLimits.storyboardNarrationBeat), direction.trim());
+      assert.equal(xaiLimits.storyboardNarrationBeat, xaiLimits.finalPrompt);
       assert.equal(xaiLimits.finalPrompt, 3800);
+
+      const plan = sanitizeStoryboardPlan(
+        {
+          title: "Complete structured direction",
+          keyframes: [
+            {
+              title: "The complete shot",
+              narrationBeat: direction,
+              imagePrompt: "A complete first-frame illustration.",
+              characters: [],
+            },
+          ],
+        },
+        {
+          sourceNarration: "The complete shot plays out.",
+          sections: [],
+          keyframeCount: 1,
+          durationSeconds: 6,
+          aspectRatio: "16:9",
+        },
+      );
+      assert.equal(plan.keyframes[0]?.narrationBeat, direction.trim());
+
+      const refinement = resolveStoryboardAnimationRefinement(
+        JSON.stringify({ classification: "suitable", narrationBeat: direction }),
+        direction,
+        defaultLimits.storyboardNarrationBeat,
+      );
+      assert.equal(refinement?.narrationBeat, direction.trim());
+
+      const gameRouteSource = readFileSync(
+        new URL("../../packages/server/src/routes/game.routes.ts", import.meta.url),
+        "utf8",
+      );
+      assert.equal(gameRouteSource.match(/promptLimits\.storyboardNarrationBeat/gu)?.length, 2);
     },
   },
   {
