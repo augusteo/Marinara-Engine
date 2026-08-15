@@ -172,6 +172,7 @@ export type FileNativeStoreController = {
    * safe, a missed one is not. 0 = never written in this process.
    */
   getTableWriteGeneration: (table: string) => number;
+  registerTables: (tables: unknown[]) => Promise<void>;
 };
 
 export type FileNativeDB = {
@@ -345,7 +346,7 @@ export function encodeShardKey(rawKey: string): string {
   return encoded;
 }
 
-export const FILE_BACKED_TABLES = [
+export const FILE_BACKED_TABLES: string[] = [
   "chats",
   "messages",
   "message_swipes",
@@ -426,9 +427,9 @@ export const FILE_BACKED_TABLES = [
   "installed_extensions",
   "library_folders",
   "mari_instructions",
-] as const;
+];
 
-type FileBackedTable = (typeof FILE_BACKED_TABLES)[number];
+type FileBackedTable = string;
 
 const FILE_BACKED_TABLE_SET = new Set<string>(FILE_BACKED_TABLES);
 const isWindows = process.platform === "win32";
@@ -2223,6 +2224,50 @@ class FileTableStore {
     return this.tableWriteGenerations.get(table) ?? 0;
   }
 
+  async registerTables(tables: unknown[]) {
+    for (const candidate of tables) {
+      if (!isFileTable(candidate)) continue;
+      const name = tableNameOf(candidate);
+      if (tableMetasByName.has(name)) continue;
+      const tableConfig = getFileTableConfig(candidate);
+      const columns: ColumnMeta[] = tableConfig.columns.map((column) => ({
+        key: column.key,
+        dbName: column.name,
+        column,
+        primary: column.primary,
+        hasDefault: column.hasDefault,
+        defaultValue: column.defaultValue,
+      }));
+      const meta: TableMeta = {
+        name,
+        table: candidate,
+        columns,
+        byKey: new Map(columns.map((column) => [column.key, column])),
+        byDbName: new Map(columns.map((column) => [column.dbName, column])),
+        primaryKey: columns.find((column) => column.primary)?.key ?? null,
+        uniqueConstraints: tableConfig.uniqueConstraints.map((constraint) => ({
+          keys: [...constraint.keys],
+          when: constraint.when,
+        })),
+      };
+      tableMetasByObject.set(candidate, meta);
+      tableMetasByName.set(name, meta);
+      for (const column of columns) columnMetasByObject.set(column.column, column);
+      if (!FILE_BACKED_TABLE_SET.has(name)) {
+        FILE_BACKED_TABLES.push(name);
+        FILE_BACKED_TABLE_SET.add(name);
+      }
+      this.tables.set(name, []);
+      const path = tableFilePath(this.rootDir, name);
+      const { value: rows } = parseJsonFile<Row[]>(path, []);
+      const source = (Array.isArray(rows) ? rows : []).filter(isRowRecord);
+      this.tables.set(
+        name,
+        source.map((row) => normalizeRow(meta, row)),
+      );
+    }
+  }
+
   contextForRow(meta: TableMeta, row: Row): RowContext {
     return {
       rows: { [meta.name]: row },
@@ -3052,6 +3097,7 @@ export async function createFileNativeDB(testHooks?: FileNativeStoreTestHooks): 
     close: () => store.close(),
     getQuarantinedTables: () => store.getQuarantinedTables(),
     getTableWriteGeneration: (table) => store.getTableWriteGeneration(table),
+    registerTables: (tables) => store.registerTables(tables),
   };
 
   let db: FileNativeDB;
